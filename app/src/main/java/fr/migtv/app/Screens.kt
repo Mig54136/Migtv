@@ -139,3 +139,55 @@ private fun GroupChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 6.dp)
     )
 }
+
+@Composable
+fun CastPicker(cast: CastViewModel) {
+    if (!cast.picking) return
+    AlertDialog(
+        onDismissRequest = cast::closePicker,
+        confirmButton = { TextButton(onClick = cast::closePicker) { Text("Fermer") } },
+        title = { Text("Caster sur…") },
+        text = {
+            if (cast.routes.isEmpty()) {
+                Text("Recherche d'appareils sur le Wi-Fi…")
+            } else {
+                Column {
+                    cast.routes.forEach { route ->
+                        TextButton(onClick = { cast.pick(route) }) { Text(route.name) }
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun CastPanel(cast: CastViewModel) {
+    Column(
+        Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(12.dp)).padding(16.dp)
+    ) {
+        Text("Diffusion sur ${cast.deviceName}", color = Cream, fontSize = 18.sp)
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Conversion audio (AAC)", color = Cream, modifier = Modifier.weight(1f))
+            Switch(checked = cast.converting, onCheckedChange = cast::setConvert)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            if (cast.converting) {
+                "Le téléphone convertit le son et sert le flux au Chromecast. Plus gourmand en batterie ; gardez l'application ouverte."
+            } else {
+                "Flux envoyé tel quel. Pas de son sur le Chromecast ? Activez la conversion."
+            },
+            color = Color.LightGray, fontSize = 13.sp
+        )
+        cast.status?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, color = Teal)
+        }
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = cast::stopCasting, modifier = Modifier.fillMaxWidth()) {
+            Text("Arrêter la diffusion")
+        }
+    }
+}

@@ -33,4 +33,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
+    implementation("androidx.mediarouter:mediarouter:1.7.0")
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-https:8.1.7")
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 }

@@ -38,10 +38,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MigApp(vm: PlayerViewModel = viewModel(), cat: CatalogViewModel = viewModel()) {
+private fun MigApp(vm: PlayerViewModel = viewModel(), cat: CatalogViewModel = viewModel(),
+    cast: CastViewModel = viewModel()
+) {
     val activity = LocalContext.current as ComponentActivity
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val fullscreen = vm.playing && landscape
+    val fullscreen = vm.playing && landscape && !cast.casting
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.onAppStopped() }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.onAppStarted() }
@@ -59,10 +61,15 @@ private fun MigApp(vm: PlayerViewModel = viewModel(), cat: CatalogViewModel = vi
 
     // Quitter le lecteur ramène en portrait libre.
     fun leavePlayer() {
+        cast.stopCasting()
         vm.stop()
         activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
     BackHandler(enabled = vm.playing) { leavePlayer() }
+
+    // Pendant un cast, le lecteur local est mis en pause.
+    LaunchedEffect(cast.casting) { if (cast.casting) vm.player.pause() }
+    CastPicker(cast)
 
     MaterialTheme(
         colorScheme = darkColorScheme(
@@ -92,19 +99,28 @@ private fun MigApp(vm: PlayerViewModel = viewModel(), cat: CatalogViewModel = vi
                             Text("Retour")
                         }
                         Spacer(Modifier.weight(1f))
+                        val current = vm.entry
+                        if (cast.available && current != null && !cast.casting) {
+                            TextButton(onClick = { cast.openPicker(current) }) { Text("Caster") }
+                        }
                         TextButton(onClick = {
                             activity.requestedOrientation =
                                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         }) { Text("Plein écran") }
                     }
-                    Box(Modifier.fillMaxWidth().height(260.dp)) {
-                        VideoPlayer(vm, Modifier.fillMaxSize())
-                        PlayerError(vm, Modifier.align(Alignment.Center))
+                    if (cast.casting) {
+                        CastPanel(cast)
+                    } else {
+                        Box(Modifier.fillMaxWidth().height(260.dp)) {
+                            VideoPlayer(vm, Modifier.fillMaxSize())
+                            PlayerError(vm, Modifier.align(Alignment.Center))
+                        }
+                        cast.status?.let { Text(it, color = Color.LightGray) }
                     }
                 } else if (!cat.loggedIn) {
                     LoginScreen(cat)
                 } else {
-                    CatalogScreen(cat, onPlay = { vm.play(it.url) })
+                    CatalogScreen(cat, onPlay = { vm.play(it) })
                 }
             }
         }

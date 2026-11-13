@@ -12,6 +12,7 @@ MigTV : client IPTV Android natif (Kotlin / Jetpack Compose) avec lecteur Media3
 - `Xtream.kt` : login via `player_api.php`, téléchargement de `get.php?type=m3u_plus` puis parsing M3U ; une entrée est classée Chaînes/Films/Séries d'après `/movie/` et `/series/` dans l'URL.
 - `SessionStore.kt` : identifiants chiffrés (EncryptedSharedPreferences). La playlist est en cache dans `filesDir/playlist.m3u`.
 - `CatalogViewModel` (connexion, catalogue) et `PlayerViewModel` (possède l'unique `ExoPlayer`, survit à la rotation ; pause à `ON_STOP`). `MainActivity` n'a que la navigation (connexion -> catalogue -> lecteur) et le plein écran ; `Screens.kt` contient les écrans.
+- Cast : `CastViewModel` pilote le SDK Google Cast (récepteur par défaut) ; le sélecteur d'appareils est un dialogue Compose basé sur `MediaRouter` (pas de `MediaRouteButton`, qui exige un thème AppCompat). Par défaut l'URL du flux est envoyée telle quelle ; l'interrupteur « Conversion audio » (mémorisé par chaîne, clé = hash de l'URL car elle contient les identifiants) passe par `AudioRelay` : FFmpegKit (fork `dev.ffmpegkit-maintained`) copie la vidéo, convertit l'audio en AAC et écrit du HLS dans le cache, servi par NanoHTTPD ; `RelayService` est le service de premier plan qui maintient le relais en vie.
 - Le manifeste déclare `configChanges` : l'activité n'est pas recréée à la rotation. Trafic en clair autorisé (serveurs Xtream souvent en http).
 - Versions : AGP 8.7.3, Kotlin 2.0.21 (plugin Compose), Compose BOM 2024.12.01, Media3 1.5.1.
 

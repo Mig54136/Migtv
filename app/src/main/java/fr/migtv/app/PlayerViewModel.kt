@@ -22,7 +22,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     var error by mutableStateOf<String?>(null)
         private set
 
-    private var currentUrl: String? = null
+    /** Entrée en cours de lecture (nécessaire pour le cast et la mémorisation par chaîne). */
+    var entry by mutableStateOf<Entry?>(null)
+        private set
     private var resumeOnStart = false
 
     init {
@@ -33,17 +35,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         })
     }
 
-    fun play(url: String) {
-        currentUrl = url
+    fun play(e: Entry) {
+        entry = e
         error = null
-        player.setMediaItem(MediaItem.fromUri(url))
+        player.setMediaItem(MediaItem.fromUri(e.url))
         player.prepare()
         player.playWhenReady = true
         playing = true
     }
 
     fun retry() {
-        currentUrl?.let(::play)
+        entry?.let(::play)
     }
 
     fun stop() {
@@ -51,6 +53,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         player.clearMediaItems()
         playing = false
         error = null
+        entry = null
     }
 
     /** Appelé quand l'app passe en arrière-plan : met la lecture en pause. */
