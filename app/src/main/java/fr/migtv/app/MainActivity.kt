@@ -1,0 +1,171 @@
+package fr.migtv.app
+
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.ui.PlayerView
+
+private val Navy = Color(0xFF171B26)
+private val Panel = Color(0xFF252B38)
+private val Teal = Color(0xFF8BBDB6)
+private val Cream = Color(0xFFF1F0E9)
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { MigApp() }
+    }
+}
+
+@Composable
+private fun MigApp(vm: PlayerViewModel = viewModel()) {
+    // rememberSaveable : le texte saisi survit aussi à la recréation du processus.
+    var url by rememberSaveable { mutableStateOf("") }
+    val activity = LocalContext.current as ComponentActivity
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val fullscreen = vm.playing && landscape
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.onAppStopped() }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.onAppStarted() }
+
+    // Barres système masquées en plein écran.
+    DisposableEffect(fullscreen) {
+        val controller = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+        if (fullscreen) {
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
+    }
+
+    // Quitter le lecteur ramène en portrait libre.
+    fun leavePlayer() {
+        vm.stop()
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+    BackHandler(enabled = vm.playing) { leavePlayer() }
+
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Teal, background = Navy,
+            surface = Panel, onBackground = Cream
+        )
+    ) {
+        if (fullscreen) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                VideoPlayer(vm, Modifier.fillMaxSize())
+                PlayerError(vm, Modifier.align(Alignment.Center))
+            }
+        } else {
+            Column(Modifier.fillMaxSize().background(Navy).padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("MIG", color = Cream, fontSize = 27.sp)
+                    Text("TV", color = Teal, fontSize = 27.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("0.1", color = Color.LightGray)
+                }
+                Spacer(Modifier.height(24.dp))
+                if (vm.playing) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = ::leavePlayer) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Retour")
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = {
+                            activity.requestedOrientation =
+                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }) { Text("Plein écran") }
+                    }
+                    Box(Modifier.fillMaxWidth().height(260.dp)) {
+                        VideoPlayer(vm, Modifier.fillMaxSize())
+                        PlayerError(vm, Modifier.align(Alignment.Center))
+                    }
+                } else {
+                    Text("Votre télévision, simplement.", color = Cream, fontSize = 23.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Text("Lecteur expérimental · première version", color = Color.LightGray)
+                    Spacer(Modifier.height(30.dp))
+                    OutlinedTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        label = { Text("URL du flux vidéo") },
+                        placeholder = { Text("https://exemple.fr/video.m3u8") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    val trimmed = url.trim()
+                    Button(
+                        onClick = { vm.play(trimmed) },
+                        enabled = trimmed.startsWith("https://") || trimmed.startsWith("http://"),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Lire le flux")
+                    }
+                    Spacer(Modifier.height(32.dp))
+                    HorizontalDivider(color = Panel)
+                    Spacer(Modifier.height(18.dp))
+                    Text("À venir", color = Teal, fontSize = 17.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "Xtream Codes · Guide TV · Favoris · Réglages audio · Chromecast",
+                        color = Color.LightGray
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Affiche le lecteur du ViewModel ; ne le libère pas (il appartient au ViewModel). */
+@Composable
+private fun VideoPlayer(vm: PlayerViewModel, modifier: Modifier) {
+    AndroidView(
+        factory = { PlayerView(it).apply { player = vm.player } },
+        update = { it.player = vm.player },
+        onRelease = { it.player = null },
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun PlayerError(vm: PlayerViewModel, modifier: Modifier) {
+    val message = vm.error ?: return
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(message, color = Cream)
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = vm::retry) { Text("Réessayer") }
+    }
+}
