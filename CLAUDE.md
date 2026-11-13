@@ -19,5 +19,5 @@ MigTV : client IPTV Android natif (Kotlin / Jetpack Compose) avec lecteur Media3
 
 - Pas de Gradle wrapper dans le dépôt : la CI utilise Gradle 8.9 installé via `gradle/actions/setup-gradle` (JDK 17). En local, utiliser un Gradle 8.9 installé ou Android Studio : `gradle :app:assembleDebug`.
 - La CI (`.github/workflows/android.yml`) se déclenche sur push vers `main` ou manuellement, et publie l'artefact `MigTV-debug-apk`.
-- Aucun lint ni test configuré. Selon `IMPORT_GITHUB.md`, le code n'a pas encore été confirmé compilable : la CI fait foi.
-- Le dépôt local n'est pas initialisé avec git ; le dépôt distant est décrit dans `IMPORT_GITHUB.md`.
+- Aucun lint ni test configuré : la CI fait foi pour la compilation (aucun build local n'est possible ici).
+- Dépôt personnel : `https://github.com/Mig54136/Migtv` (branche `main`), identité git locale `Mig54136` (la config globale est celle de l'entreprise : ne pas pousser avec).
