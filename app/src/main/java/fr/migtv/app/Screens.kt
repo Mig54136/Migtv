@@ -3,6 +3,8 @@ package fr.migtv.app
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -21,19 +23,88 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun LoginScreen(vm: CatalogViewModel) {
-    var server by rememberSaveable { mutableStateOf(vm.saved?.server.orEmpty()) }
-    var user by rememberSaveable { mutableStateOf(vm.saved?.user.orEmpty()) }
-    var pass by rememberSaveable { mutableStateOf("") }
+fun ProfilesScreen(vm: CatalogViewModel) {
+    var toDelete by remember { mutableStateOf<Profile?>(null) }
 
-    Column(Modifier.fillMaxWidth()) {
-        Text("Connexion Xtream", color = Cream, fontSize = 23.sp)
+    Column(Modifier.fillMaxSize()) {
+        Text("Mes profils", color = Cream, fontSize = 23.sp)
+        Spacer(Modifier.height(16.dp))
+        if (vm.loading) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+        }
+        vm.error?.let {
+            Text(it, color = Color(0xFFE57373))
+            Spacer(Modifier.height(8.dp))
+        }
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(vm.profiles) { p ->
+                Column(
+                    Modifier.fillMaxWidth()
+                        .background(Panel, RoundedCornerShape(12.dp))
+                        .clickable(enabled = !vm.loading) { vm.open(p) }
+                        .padding(start = 16.dp, top = 14.dp, end = 8.dp, bottom = 4.dp)
+                ) {
+                    Text(p.name, color = Cream, fontSize = 18.sp)
+                    Text(p.host, color = Color.Gray, fontSize = 13.sp)
+                    Row {
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { vm.startEdit(p) }) { Text("Modifier") }
+                        TextButton(onClick = { toDelete = p }) { Text("Supprimer") }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { vm.startEdit(null) },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp)
+        ) { Text("Ajouter un profil") }
+    }
+
+    toDelete?.let { p ->
+        AlertDialog(
+            onDismissRequest = { toDelete = null },
+            title = { Text("Supprimer « ${p.name} » ?") },
+            text = { Text("Le profil et sa playlist enregistrée seront effacés de ce téléphone.") },
+            confirmButton = { TextButton(onClick = { vm.delete(p); toDelete = null }) { Text("Supprimer") } },
+            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Annuler") } }
+        )
+    }
+}
+
+@Composable
+fun ProfileForm(vm: CatalogViewModel, profile: Profile) {
+    var name by rememberSaveable(profile.id) { mutableStateOf(profile.name) }
+    var server by rememberSaveable(profile.id) { mutableStateOf(profile.server) }
+    var user by rememberSaveable(profile.id) { mutableStateOf(profile.user) }
+    var pass by rememberSaveable(profile.id) { mutableStateOf(profile.pass) }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text(if (profile.id.isEmpty()) "Nouveau profil" else "Modifier le profil", color = Cream, fontSize = 23.sp)
         Spacer(Modifier.height(6.dp))
-        Text("La playlist M3U est téléchargée avec votre compte.", color = Color.LightGray)
+        Text("La playlist est téléchargée avec ce compte Xtream.", color = Color.LightGray)
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(
-            value = server, onValueChange = { server = it },
-            label = { Text("Serveur") },
+            value = name, onValueChange = { name = it },
+            label = { Text("Nom du profil") },
+            placeholder = { Text("Salon, Abonnement 2…") },
+            singleLine = true, modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = server,
+            onValueChange = { text ->
+                // Une URL complète collée (get.php?username=..&password=..) remplit tous les champs.
+                val parsed = Xtream.parseProviderUrl(text)
+                if (parsed != null) {
+                    server = parsed.first; user = parsed.second; pass = parsed.third
+                } else {
+                    server = text
+                }
+            },
+            label = { Text("URL du serveur") },
             placeholder = { Text("http://exemple.fr:8080") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             singleLine = true, modifier = Modifier.fillMaxWidth()
@@ -58,7 +129,7 @@ fun LoginScreen(vm: CatalogViewModel) {
             Spacer(Modifier.height(12.dp))
         }
         Button(
-            onClick = { vm.connect(server, user, pass) },
+            onClick = { vm.connect(Profile(profile.id, name, server, user, pass)) },
             enabled = !vm.loading && server.isNotBlank() && user.isNotBlank() && pass.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(10.dp)
@@ -68,8 +139,11 @@ fun LoginScreen(vm: CatalogViewModel) {
                 Spacer(Modifier.width(10.dp))
                 Text("Téléchargement de la playlist…")
             } else {
-                Text("Se connecter")
+                Text("Enregistrer et se connecter")
             }
+        }
+        if (vm.profiles.isNotEmpty()) {
+            TextButton(onClick = vm::cancelForm, modifier = Modifier.fillMaxWidth()) { Text("Annuler") }
         }
     }
 }
@@ -90,9 +164,13 @@ fun CatalogScreen(vm: CatalogViewModel, onPlay: (Entry) -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${vm.entries.size} éléments", color = Color.LightGray, modifier = Modifier.weight(1f))
+            Text(
+                "${vm.active?.name.orEmpty()} · ${vm.entries.size}",
+                color = Color.LightGray, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
             TextButton(onClick = vm::refresh, enabled = !vm.loading) { Text("Actualiser") }
-            TextButton(onClick = vm::logout) { Text("Déconnexion") }
+            TextButton(onClick = vm::switchProfile) { Text("Profils") }
         }
         if (vm.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
         vm.error?.let { Text(it, color = Color(0xFFE57373)) }

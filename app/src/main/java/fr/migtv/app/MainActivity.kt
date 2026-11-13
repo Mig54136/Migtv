@@ -117,8 +117,10 @@ private fun MigApp(vm: PlayerViewModel = viewModel(), cat: CatalogViewModel = vi
                         }
                         cast.status?.let { Text(it, color = Color.LightGray) }
                     }
-                } else if (!cat.loggedIn) {
-                    LoginScreen(cat)
+                } else if (cat.formProfile != null) {
+                    ProfileForm(cat, cat.formProfile!!)
+                } else if (cat.active == null) {
+                    ProfilesScreen(cat)
                 } else {
                     CatalogScreen(cat, onPlay = { vm.play(it) })
                 }

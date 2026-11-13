@@ -1,5 +1,6 @@
 package fr.migtv.app
 
+import android.net.Uri
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
@@ -24,6 +25,19 @@ object Xtream {
     fun normalizeServer(raw: String): String {
         val s = raw.trim().trimEnd('/')
         return if (s.startsWith("http://") || s.startsWith("https://")) s else "http://$s"
+    }
+
+    /** Extrait (serveur, utilisateur, mot de passe) d'une URL du type http://hote:port/get.php?username=..&password=.. */
+    fun parseProviderUrl(text: String): Triple<String, String, String>? {
+        val t = text.trim()
+        if (!t.startsWith("http") || "username=" !in t || "password=" !in t) return null
+        val u = Uri.parse(t)
+        val user = u.getQueryParameter("username")
+        val pass = u.getQueryParameter("password")
+        val host = u.host
+        if (user == null || pass == null || host == null) return null
+        val port = if (u.port != -1) ":${u.port}" else ""
+        return Triple("${u.scheme}://$host$port", user, pass)
     }
 
     private fun q(s: String) = URLEncoder.encode(s, "UTF-8")

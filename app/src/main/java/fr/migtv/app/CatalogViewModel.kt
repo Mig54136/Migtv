@@ -11,14 +11,22 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.util.UUID
 
 class CatalogViewModel(app: Application) : AndroidViewModel(app) {
     private val store = SessionStore(app)
-    private val file = File(app.filesDir, "playlist.m3u")
+    private val dir = app.filesDir
 
-    val saved: Credentials? = store.load()
+    /** Chaque profil a sa propre playlist en cache : changer de profil est instantané. */
+    private fun cacheFile(p: Profile) = File(dir, "playlist_${p.id}.m3u")
 
-    var loggedIn by mutableStateOf(false)
+    var profiles by mutableStateOf(store.profiles())
+        private set
+    /** Profil ouvert ; null = écran de choix des profils. */
+    var active by mutableStateOf<Profile?>(null)
+        private set
+    /** Profil en cours d'édition (id vide = nouveau) ; null = formulaire fermé. */
+    var formProfile by mutableStateOf<Profile?>(null)
         private set
     var loading by mutableStateOf(false)
         private set
@@ -28,36 +36,67 @@ class CatalogViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     init {
-        // Reprise de session : on relit la playlist en cache sans retélécharger.
-        if (saved != null && file.exists()) {
-            viewModelScope.launch {
-                loading = true
-                try {
-                    entries = withContext(Dispatchers.IO) { Xtream.parseM3u(file) }
-                    loggedIn = entries.isNotEmpty()
-                } catch (e: IOException) {
-                    loggedIn = false
-                } finally {
-                    loading = false
-                }
+        val last = profiles.firstOrNull { it.id == store.lastActive }
+        when {
+            profiles.isEmpty() -> startEdit(null)
+            last != null && cacheFile(last).exists() -> open(last)
+        }
+    }
+
+    fun startEdit(p: Profile?) {
+        error = null
+        formProfile = p ?: Profile("", "", "", "", "")
+    }
+
+    fun cancelForm() {
+        formProfile = null
+        error = null
+    }
+
+    /** Ouvre un profil : playlist en cache si elle existe, sinon téléchargement. */
+    fun open(p: Profile) {
+        val f = cacheFile(p)
+        if (!f.exists()) {
+            connect(p)
+            return
+        }
+        viewModelScope.launch {
+            loading = true
+            error = null
+            try {
+                entries = withContext(Dispatchers.IO) { Xtream.parseM3u(f) }
+                active = p
+                store.lastActive = p.id
+            } catch (e: IOException) {
+                connect(p)
+            } finally {
+                loading = false
             }
         }
     }
 
-    fun connect(server: String, user: String, pass: String) {
+    /** Vérifie les identifiants, télécharge la playlist, puis enregistre et ouvre le profil. */
+    fun connect(input: Profile) {
         if (loading) return
-        val creds = Credentials(Xtream.normalizeServer(server), user.trim(), pass)
+        val p = input.copy(
+            id = input.id.ifEmpty { UUID.randomUUID().toString() },
+            server = Xtream.normalizeServer(input.server),
+            user = input.user.trim()
+        ).let { it.copy(name = it.name.trim().ifEmpty { it.host }) }
         viewModelScope.launch {
             loading = true
             error = null
             try {
                 entries = withContext(Dispatchers.IO) {
-                    Xtream.login(creds.server, creds.user, creds.pass)
-                    Xtream.downloadM3u(creds.server, creds.user, creds.pass, file)
-                    Xtream.parseM3u(file)
+                    Xtream.login(p.server, p.user, p.pass)
+                    Xtream.downloadM3u(p.server, p.user, p.pass, cacheFile(p))
+                    Xtream.parseM3u(cacheFile(p))
                 }
-                store.save(creds)
-                loggedIn = true
+                profiles = profiles.filter { it.id != p.id } + p
+                store.saveProfiles(profiles)
+                store.lastActive = p.id
+                active = p
+                formProfile = null
             } catch (e: XtreamException) {
                 error = e.message
             } catch (e: IOException) {
@@ -68,16 +107,23 @@ class CatalogViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Retélécharge la playlist avec les identifiants enregistrés. */
+    /** Retélécharge la playlist du profil ouvert. */
     fun refresh() {
-        saved?.let { connect(it.server, it.user, it.pass) }
-            ?: store.load()?.let { connect(it.server, it.user, it.pass) }
+        active?.let(::connect)
     }
 
-    fun logout() {
-        store.clear()
-        file.delete()
+    /** Retour au choix des profils (sans rien supprimer). */
+    fun switchProfile() {
+        active = null
         entries = emptyList()
-        loggedIn = false
+        error = null
+        store.lastActive = null
+    }
+
+    fun delete(p: Profile) {
+        cacheFile(p).delete()
+        profiles = profiles.filter { it.id != p.id }
+        store.saveProfiles(profiles)
+        if (profiles.isEmpty()) startEdit(null)
     }
 }
