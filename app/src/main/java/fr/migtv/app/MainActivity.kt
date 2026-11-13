@@ -14,7 +14,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,11 +30,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.ui.PlayerView
 
-private val Navy = Color(0xFF171B26)
-private val Panel = Color(0xFF252B38)
-private val Teal = Color(0xFF8BBDB6)
-private val Cream = Color(0xFFF1F0E9)
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,9 +38,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun MigApp(vm: PlayerViewModel = viewModel()) {
-    // rememberSaveable : le texte saisi survit aussi à la recréation du processus.
-    var url by rememberSaveable { mutableStateOf("") }
+private fun MigApp(vm: PlayerViewModel = viewModel(), cat: CatalogViewModel = viewModel()) {
     val activity = LocalContext.current as ComponentActivity
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val fullscreen = vm.playing && landscape
@@ -89,7 +81,7 @@ private fun MigApp(vm: PlayerViewModel = viewModel()) {
                     Text("MIG", color = Cream, fontSize = 27.sp)
                     Text("TV", color = Teal, fontSize = 27.sp)
                     Spacer(Modifier.weight(1f))
-                    Text("0.1", color = Color.LightGray)
+                    Text("0.2", color = Color.LightGray)
                 }
                 Spacer(Modifier.height(24.dp))
                 if (vm.playing) {
@@ -109,40 +101,10 @@ private fun MigApp(vm: PlayerViewModel = viewModel()) {
                         VideoPlayer(vm, Modifier.fillMaxSize())
                         PlayerError(vm, Modifier.align(Alignment.Center))
                     }
+                } else if (!cat.loggedIn) {
+                    LoginScreen(cat)
                 } else {
-                    Text("Votre télévision, simplement.", color = Cream, fontSize = 23.sp)
-                    Spacer(Modifier.height(10.dp))
-                    Text("Lecteur expérimental · première version", color = Color.LightGray)
-                    Spacer(Modifier.height(30.dp))
-                    OutlinedTextField(
-                        value = url,
-                        onValueChange = { url = it },
-                        label = { Text("URL du flux vidéo") },
-                        placeholder = { Text("https://exemple.fr/video.m3u8") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    val trimmed = url.trim()
-                    Button(
-                        onClick = { vm.play(trimmed) },
-                        enabled = trimmed.startsWith("https://") || trimmed.startsWith("http://"),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Lire le flux")
-                    }
-                    Spacer(Modifier.height(32.dp))
-                    HorizontalDivider(color = Panel)
-                    Spacer(Modifier.height(18.dp))
-                    Text("À venir", color = Teal, fontSize = 17.sp)
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "Xtream Codes · Guide TV · Favoris · Réglages audio · Chromecast",
-                        color = Color.LightGray
-                    )
+                    CatalogScreen(cat, onPlay = { vm.play(it.url) })
                 }
             }
         }

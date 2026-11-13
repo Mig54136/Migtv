@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Projet
 
-MigTV : prototype Android natif (Kotlin / Jetpack Compose) avec lecteur Media3/ExoPlayer (HLS inclus). Version 0.1 : l'utilisateur saisit une URL vidéo HTTP(S) et la lit. Les étapes suivantes prévues (voir `README.md`) : connexion Xtream Codes et catalogue, EPG, favoris, pistes audio, Google Cast, transcodage MP2 → AAC. Le dépôt ne doit contenir aucun identifiant IPTV.
+MigTV : client IPTV Android natif (Kotlin / Jetpack Compose) avec lecteur Media3/ExoPlayer. Objectif principal : lire les flux IPTV Xtream Codes sur Chromecast 1re génération, dont l'audio (MP2, AC3...) n'est pas décodé. Priorité : conversion audio vers AAC via un relais local (FFmpeg -> HLS servi sur le Wi-Fi -> Google Cast). Le décalage audio n'est pas prioritaire. Le dépôt ne doit contenir aucun identifiant IPTV.
 
 ## Architecture
 
-- Module unique `:app` (`fr.migtv.app`, minSdk 26, compileSdk/targetSdk 35, Java/Kotlin 17).
-- Tout le code est dans `app/src/main/java/fr/migtv/app/MainActivity.kt` : `MainActivity` (ComponentActivity), le composable `MigApp` (saisie d'URL + état) et `VideoPlayer` (encapsule ExoPlayer/PlayerView).
-- Pas de ressources ni de tests pour l'instant. Le manifeste autorise `INTERNET` et le trafic en clair (`usesCleartextTraffic`).
+- Module unique `:app` (`fr.migtv.app`, minSdk 26, compileSdk/targetSdk 35, Java/Kotlin 17). Pas de ressources ni de tests.
+- `Xtream.kt` : login via `player_api.php`, téléchargement de `get.php?type=m3u_plus` puis parsing M3U ; une entrée est classée Chaînes/Films/Séries d'après `/movie/` et `/series/` dans l'URL.
+- `SessionStore.kt` : identifiants chiffrés (EncryptedSharedPreferences). La playlist est en cache dans `filesDir/playlist.m3u`.
+- `CatalogViewModel` (connexion, catalogue) et `PlayerViewModel` (possède l'unique `ExoPlayer`, survit à la rotation ; pause à `ON_STOP`). `MainActivity` n'a que la navigation (connexion -> catalogue -> lecteur) et le plein écran ; `Screens.kt` contient les écrans.
+- Le manifeste déclare `configChanges` : l'activité n'est pas recréée à la rotation. Trafic en clair autorisé (serveurs Xtream souvent en http).
 - Versions : AGP 8.7.3, Kotlin 2.0.21 (plugin Compose), Compose BOM 2024.12.01, Media3 1.5.1.
 
 ## Compilation
