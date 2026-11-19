@@ -1,76 +1,104 @@
 package fr.migtv.app
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+/** Zone en creux à fond blanc (liste), façon boîte de liste Windows 95. */
+private fun Modifier.sunken(): Modifier = bevel(raised = false, fill = Hilite).padding(2.dp)
+
+@Composable
+fun StartingScreen() {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+        Text("Chargement…")
+        Spacer(Modifier.height(8.dp))
+        WinProgress()
+    }
+}
 
 @Composable
 fun ProfilesScreen(vm: CatalogViewModel) {
     var toDelete by remember { mutableStateOf<Profile?>(null) }
+    val noRipple = remember { MutableInteractionSource() }
 
     Column(Modifier.fillMaxSize()) {
-        Text("Mes profils", color = Cream, fontSize = 23.sp)
-        Spacer(Modifier.height(16.dp))
         if (vm.loading) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            WinProgress()
             Spacer(Modifier.height(8.dp))
         }
         vm.error?.let {
-            Text(it, color = Color(0xFFE57373))
+            Text(it, color = ErrorRed)
             Spacer(Modifier.height(8.dp))
         }
-        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().sunken()) {
             items(vm.profiles) { p ->
                 Column(
                     Modifier.fillMaxWidth()
-                        .background(Panel, RoundedCornerShape(12.dp))
-                        .clickable(enabled = !vm.loading) { vm.open(p) }
-                        .padding(start = 16.dp, top = 14.dp, end = 8.dp, bottom = 4.dp)
+                        .clickable(interactionSource = noRipple, indication = null, enabled = !vm.loading) { vm.open(p) }
+                        .padding(8.dp)
                 ) {
-                    Text(p.name, color = Cream, fontSize = 18.sp)
-                    Text(p.host, color = Color.Gray, fontSize = 13.sp)
-                    Row {
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { vm.startEdit(p) }) { Text("Modifier") }
-                        TextButton(onClick = { toDelete = p }) { Text("Supprimer") }
+                    Text(p.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(p.host, color = InkSoft, fontSize = 13.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        WinButton("Modifier", onClick = { vm.startEdit(p) }, compact = true)
+                        Spacer(Modifier.width(8.dp))
+                        WinButton("Supprimer", onClick = { toDelete = p }, compact = true)
                     }
                 }
+                WinSeparator()
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { vm.startEdit(null) },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp)
-        ) { Text("Ajouter un profil") }
+        Spacer(Modifier.height(10.dp))
+        WinButton("Ajouter un profil", onClick = { vm.startEdit(null) }, modifier = Modifier.fillMaxWidth())
     }
 
     toDelete?.let { p ->
-        AlertDialog(
-            onDismissRequest = { toDelete = null },
-            title = { Text("Supprimer « ${p.name} » ?") },
-            text = { Text("Le profil et sa playlist enregistrée seront effacés de ce téléphone.") },
-            confirmButton = { TextButton(onClick = { vm.delete(p); toDelete = null }) { Text("Supprimer") } },
-            dismissButton = { TextButton(onClick = { toDelete = null }) { Text("Annuler") } }
-        )
+        WinDialog("Supprimer", onDismiss = { toDelete = null }) {
+            Text("Supprimer « ${p.name} » ?", fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text("Le profil et sa playlist enregistrée seront effacés de ce téléphone.")
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                WinButton("Supprimer", onClick = { vm.delete(p); toDelete = null })
+                Spacer(Modifier.width(8.dp))
+                WinButton("Annuler", onClick = { toDelete = null })
+            }
+        }
     }
 }
 
@@ -82,18 +110,15 @@ fun ProfileForm(vm: CatalogViewModel, profile: Profile) {
     var pass by rememberSaveable(profile.id) { mutableStateOf(profile.pass) }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Text(if (profile.id.isEmpty()) "Nouveau profil" else "Modifier le profil", color = Cream, fontSize = 23.sp)
-        Spacer(Modifier.height(6.dp))
-        Text("La playlist est téléchargée avec ce compte Xtream.", color = Color.LightGray)
-        Spacer(Modifier.height(24.dp))
-        OutlinedTextField(
+        Text("La playlist est téléchargée avec ce compte Xtream.", color = InkSoft)
+        Spacer(Modifier.height(16.dp))
+        WinField(
             value = name, onValueChange = { name = it },
-            label = { Text("Nom du profil") },
-            placeholder = { Text("Salon, Abonnement 2…") },
-            singleLine = true, modifier = Modifier.fillMaxWidth()
+            label = "Nom du profil", placeholder = "Salon, Abonnement 2…",
+            modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
+        Spacer(Modifier.height(10.dp))
+        WinField(
             value = server,
             onValueChange = { text ->
                 // Une URL complète collée (get.php?username=..&password=..) remplit tous les champs.
@@ -104,46 +129,43 @@ fun ProfileForm(vm: CatalogViewModel, profile: Profile) {
                     server = text
                 }
             },
-            label = { Text("URL du serveur") },
-            placeholder = { Text("http://exemple.fr:8080") },
+            label = "URL du serveur", placeholder = "http://exemple.fr:8080",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
+        Spacer(Modifier.height(10.dp))
+        WinField(
             value = user, onValueChange = { user = it },
-            label = { Text("Utilisateur") },
-            singleLine = true, modifier = Modifier.fillMaxWidth()
+            label = "Utilisateur", modifier = Modifier.fillMaxWidth()
         )
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
+        Spacer(Modifier.height(10.dp))
+        WinField(
             value = pass, onValueChange = { pass = it },
-            label = { Text("Mot de passe") },
+            label = "Mot de passe",
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            singleLine = true, modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
-        vm.error?.let {
-            Text(it, color = Color(0xFFE57373))
+        if (vm.loading) {
+            Text("Téléchargement de la playlist…")
+            Spacer(Modifier.height(6.dp))
+            WinProgress()
             Spacer(Modifier.height(12.dp))
         }
-        Button(
+        vm.error?.let {
+            Text(it, color = ErrorRed)
+            Spacer(Modifier.height(12.dp))
+        }
+        WinButton(
+            "Enregistrer et se connecter",
             onClick = { vm.connect(Profile(profile.id, name, server, user, pass)) },
             enabled = !vm.loading && server.isNotBlank() && user.isNotBlank() && pass.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp)
-        ) {
-            if (vm.loading) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(10.dp))
-                Text("Téléchargement de la playlist…")
-            } else {
-                Text("Enregistrer et se connecter")
-            }
-        }
+            modifier = Modifier.fillMaxWidth()
+        )
         if (vm.profiles.isNotEmpty()) {
-            TextButton(onClick = vm::cancelForm, modifier = Modifier.fillMaxWidth()) { Text("Annuler") }
+            Spacer(Modifier.height(8.dp))
+            WinButton("Annuler", onClick = vm::cancelForm, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -154,102 +176,99 @@ fun CatalogScreen(vm: CatalogViewModel, onPlay: (Entry) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var group by rememberSaveable(tab) { mutableStateOf<String?>(null) }
     val kind = Kind.entries[tab]
+    val noRipple = remember { MutableInteractionSource() }
 
-    val ofKind = remember(vm.entries, kind) { vm.entries.filter { it.kind == kind } }
-    val groups = remember(ofKind) { ofKind.map { it.group }.distinct().sorted() }
-    val shown = remember(ofKind, group, query) {
+    // Types et catégories sont pré-calculés au chargement de la playlist.
+    val all = vm.catalog.byKind[kind].orEmpty()
+    val groups = vm.catalog.groups[kind].orEmpty()
+
+    // Filtrage hors du thread principal, avec une courte attente pendant la frappe :
+    // un changement de clé annule le calcul précédent.
+    val shown by produceState(all, all, group, query) {
         val q = query.trim()
-        ofKind.filter { (group == null || it.group == group) && (q.isEmpty() || it.name.contains(q, ignoreCase = true)) }
+        if (q.isNotEmpty()) delay(180)
+        value = withContext(Dispatchers.Default) {
+            if (group == null && q.isEmpty()) {
+                all
+            } else {
+                all.filter { (group == null || it.group == group) && (q.isEmpty() || it.name.contains(q, ignoreCase = true)) }
+            }
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "${vm.active?.name.orEmpty()} · ${vm.entries.size}",
-                color = Color.LightGray, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                "${vm.catalog.size} entrées",
+                color = InkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = vm::refresh, enabled = !vm.loading) { Text("Actualiser") }
-            TextButton(onClick = vm::switchProfile) { Text("Profils") }
-        }
-        if (vm.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        vm.error?.let { Text(it, color = Color(0xFFE57373)) }
-        TabRow(selectedTabIndex = tab, containerColor = Navy, contentColor = Teal) {
-            Kind.entries.forEachIndexed { i, k ->
-                Tab(selected = tab == i, onClick = { tab = i }, text = { Text(k.label) })
-            }
+            WinButton("Actualiser", onClick = vm::refresh, enabled = !vm.loading, compact = true)
+            Spacer(Modifier.width(6.dp))
+            WinButton("Profils", onClick = vm::switchProfile, compact = true)
         }
         Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
+        if (vm.loading) {
+            WinProgress()
+            Spacer(Modifier.height(8.dp))
+        }
+        vm.error?.let {
+            Text(it, color = ErrorRed)
+            Spacer(Modifier.height(8.dp))
+        }
+        WinTabs(Kind.entries.map { it.label }, tab) { tab = it }
+        Spacer(Modifier.height(8.dp))
+        WinField(
             value = query, onValueChange = { query = it },
-            label = { Text("Rechercher") },
-            singleLine = true, modifier = Modifier.fillMaxWidth()
+            label = "Rechercher", modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            item { GroupChip("Tout", group == null) { group = null } }
-            items(groups) { g -> GroupChip(g, group == g) { group = g } }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { WinButton("Tout", onClick = { group = null }, compact = true, latched = group == null) }
+            items(groups) { g -> WinButton(g, onClick = { group = g }, compact = true, latched = group == g) }
         }
         Spacer(Modifier.height(8.dp))
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().sunken()) {
             items(shown) { e ->
                 Column(
-                    Modifier.fillMaxWidth().clickable { onPlay(e) }.padding(vertical = 10.dp)
+                    Modifier.fillMaxWidth()
+                        .clickable(interactionSource = noRipple, indication = null) { onPlay(e) }
+                        .padding(horizontal = 8.dp, vertical = 7.dp)
                 ) {
-                    Text(e.name, color = Cream, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(e.group, color = Color.Gray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.group, color = InkSoft, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                HorizontalDivider(color = Panel)
+                WinSeparator()
             }
         }
     }
 }
 
 @Composable
-private fun GroupChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        color = if (selected) Navy else Cream,
-        maxLines = 1,
-        modifier = Modifier
-            .background(if (selected) Teal else Panel, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-    )
-}
-
-@Composable
 fun CastPicker(cast: CastViewModel) {
     if (!cast.picking) return
-    AlertDialog(
-        onDismissRequest = cast::closePicker,
-        confirmButton = { TextButton(onClick = cast::closePicker) { Text("Fermer") } },
-        title = { Text("Caster sur…") },
-        text = {
-            if (cast.routes.isEmpty()) {
-                Text("Recherche d'appareils sur le Wi-Fi…")
-            } else {
-                Column {
-                    cast.routes.forEach { route ->
-                        TextButton(onClick = { cast.pick(route) }) { Text(route.name) }
-                    }
-                }
+    WinDialog("Caster sur…", onDismiss = cast::closePicker) {
+        if (cast.routes.isEmpty()) {
+            Text("Recherche d'appareils sur le Wi-Fi…")
+            Spacer(Modifier.height(6.dp))
+            WinProgress()
+        } else {
+            cast.routes.forEach { route ->
+                WinButton(route.name, onClick = { cast.pick(route) }, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(6.dp))
             }
         }
-    )
+        Spacer(Modifier.height(8.dp))
+        WinButton("Fermer", onClick = cast::closePicker, modifier = Modifier.fillMaxWidth())
+    }
 }
 
 @Composable
 fun CastPanel(cast: CastViewModel) {
-    Column(
-        Modifier.fillMaxWidth().background(Panel, RoundedCornerShape(12.dp)).padding(16.dp)
-    ) {
-        Text("Diffusion sur ${cast.deviceName}", color = Cream, fontSize = 18.sp)
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Conversion audio (AAC)", color = Cream, modifier = Modifier.weight(1f))
-            Switch(checked = cast.converting, onCheckedChange = cast::setConvert)
-        }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text("Diffusion sur ${cast.deviceName}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Spacer(Modifier.height(14.dp))
+        WinCheck(cast.converting, "Conversion audio (AAC)", cast::setConvert, Modifier.fillMaxWidth())
         Spacer(Modifier.height(6.dp))
         Text(
             if (cast.converting) {
@@ -257,15 +276,13 @@ fun CastPanel(cast: CastViewModel) {
             } else {
                 "Flux envoyé tel quel. Pas de son sur le Chromecast ? Activez la conversion."
             },
-            color = Color.LightGray, fontSize = 13.sp
+            color = InkSoft, fontSize = 13.sp
         )
         cast.status?.let {
             Spacer(Modifier.height(10.dp))
-            Text(it, color = Teal)
+            Text(it, color = TitleBlue, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(16.dp))
-        OutlinedButton(onClick = cast::stopCasting, modifier = Modifier.fillMaxWidth()) {
-            Text("Arrêter la diffusion")
-        }
+        WinButton("Arrêter la diffusion", onClick = cast::stopCasting, modifier = Modifier.fillMaxWidth())
     }
 }

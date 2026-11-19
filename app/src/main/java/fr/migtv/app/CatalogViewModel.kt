@@ -14,13 +14,17 @@ import java.io.IOException
 import java.util.UUID
 
 class CatalogViewModel(app: Application) : AndroidViewModel(app) {
-    private val store = SessionStore(app)
+    // Créé hors du thread principal : l'initialisation du chiffrement (Keystore) est lente.
+    private lateinit var store: SessionStore
     private val dir = app.filesDir
 
     /** Chaque profil a sa propre playlist en cache : changer de profil est instantané. */
     private fun cacheFile(p: Profile) = File(dir, "playlist_${p.id}.m3u")
 
-    var profiles by mutableStateOf(store.profiles())
+    /** Vrai tant que les profils et la dernière playlist ne sont pas chargés (démarrage). */
+    var starting by mutableStateOf(true)
+        private set
+    var profiles by mutableStateOf<List<Profile>>(emptyList())
         private set
     /** Profil ouvert ; null = écran de choix des profils. */
     var active by mutableStateOf<Profile?>(null)
@@ -32,14 +36,28 @@ class CatalogViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var error by mutableStateOf<String?>(null)
         private set
-    var entries by mutableStateOf<List<Entry>>(emptyList())
+    var catalog by mutableStateOf(Catalog.EMPTY)
         private set
 
     init {
-        val last = profiles.firstOrNull { it.id == store.lastActive }
-        when {
-            profiles.isEmpty() -> startEdit(null)
-            last != null && cacheFile(last).exists() -> open(last)
+        viewModelScope.launch {
+            val (list, lastId) = withContext(Dispatchers.IO) {
+                store = SessionStore(app)
+                store.profiles() to store.lastActive
+            }
+            profiles = list
+            val last = list.firstOrNull { it.id == lastId }
+            if (list.isEmpty()) {
+                startEdit(null)
+            } else if (last != null && cacheFile(last).exists()) {
+                try {
+                    catalog = withContext(Dispatchers.IO) { Catalog(Xtream.parseM3u(cacheFile(last))) }
+                    active = last
+                } catch (e: IOException) {
+                    // Cache illisible : l'utilisateur choisira son profil et la playlist sera retéléchargée.
+                }
+            }
+            starting = false
         }
     }
 
@@ -64,7 +82,7 @@ class CatalogViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             error = null
             try {
-                entries = withContext(Dispatchers.IO) { Xtream.parseM3u(f) }
+                catalog = withContext(Dispatchers.IO) { Catalog(Xtream.parseM3u(f)) }
                 active = p
                 store.lastActive = p.id
             } catch (e: IOException) {
@@ -87,10 +105,10 @@ class CatalogViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             error = null
             try {
-                entries = withContext(Dispatchers.IO) {
+                catalog = withContext(Dispatchers.IO) {
                     Xtream.login(p.server, p.user, p.pass)
                     Xtream.downloadM3u(p.server, p.user, p.pass, cacheFile(p))
-                    Xtream.parseM3u(cacheFile(p))
+                    Catalog(Xtream.parseM3u(cacheFile(p)))
                 }
                 profiles = profiles.filter { it.id != p.id } + p
                 store.saveProfiles(profiles)
@@ -115,7 +133,7 @@ class CatalogViewModel(app: Application) : AndroidViewModel(app) {
     /** Retour au choix des profils (sans rien supprimer). */
     fun switchProfile() {
         active = null
-        entries = emptyList()
+        catalog = Catalog.EMPTY
         error = null
         store.lastActive = null
     }

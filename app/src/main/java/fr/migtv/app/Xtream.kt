@@ -95,22 +95,32 @@ object Xtream {
         }
     }
 
-    private val attr = Regex("""([\w-]+)="([^"]*)"""")
+    /** Valeur de `cle="..."` dans une ligne #EXTINF, sans regex (le M3U compte des dizaines de milliers de lignes). */
+    private fun attrValue(line: String, key: String): String? {
+        val i = line.indexOf(key)
+        if (i < 0) return null
+        val start = i + key.length
+        val end = line.indexOf('"', start)
+        return if (end < 0) null else line.substring(start, end)
+    }
 
     fun parseM3u(file: File): List<Entry> {
-        val out = ArrayList<Entry>()
+        val out = ArrayList<Entry>(32_768)
+        // Les mêmes catégories reviennent des milliers de fois : une seule String par catégorie en mémoire.
+        val groups = HashMap<String, String>()
         var name = ""
         var logo: String? = null
         var group = ""
-        file.bufferedReader().useLines { lines ->
+        file.bufferedReader(bufferSize = 64 * 1024).useLines { lines ->
             for (raw in lines) {
                 val line = raw.trim()
                 when {
                     line.startsWith("#EXTINF") -> {
-                        val attrs = attr.findAll(line).associate { it.groupValues[1] to it.groupValues[2] }
-                        name = line.substringAfterLast(',').trim().ifEmpty { attrs["tvg-name"].orEmpty() }
-                        logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
-                        group = attrs["group-title"].orEmpty().ifBlank { "Sans catégorie" }
+                        name = line.substringAfterLast(',').trim()
+                            .ifEmpty { attrValue(line, "tvg-name=\"").orEmpty() }
+                        logo = attrValue(line, "tvg-logo=\"")?.takeIf { it.isNotBlank() }
+                        val g = attrValue(line, "group-title=\"").orEmpty().ifBlank { "Sans catégorie" }
+                        group = groups.getOrPut(g) { g }
                     }
                     line.isNotEmpty() && !line.startsWith("#") -> {
                         val kind = when {
@@ -124,6 +134,20 @@ object Xtream {
                 }
             }
         }
+        out.trimToSize()
         return out
+    }
+}
+
+/** Playlist déjà triée par type, avec les catégories de chaque type : calculé une fois, pas à chaque écran. */
+class Catalog(val entries: List<Entry>) {
+    val byKind: Map<Kind, List<Entry>> = entries.groupBy { it.kind }
+    val groups: Map<Kind, List<String>> = Kind.entries.associateWith { k ->
+        byKind[k].orEmpty().mapTo(java.util.TreeSet<String>()) { it.group }.toList()
+    }
+    val size: Int get() = entries.size
+
+    companion object {
+        val EMPTY = Catalog(emptyList())
     }
 }
