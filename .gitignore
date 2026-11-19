@@ -5,3 +5,7 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+
+# APK locaux et captures de debug
+*.apk
+erreurmig.png

@@ -45,7 +45,7 @@ object AudioRelay {
             lastLog = ""
             val args = arrayOf(
                 "-hide_banner", "-loglevel", "warning",
-                "-user_agent", "MigTV/0.2",
+                "-user_agent", "MigTV/0.3",
                 "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
                 "-re", "-i", url,
                 "-map", "0:v:0", "-map", "0:a:0?", "-sn", "-dn",

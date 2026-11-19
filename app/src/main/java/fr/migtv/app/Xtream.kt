@@ -46,7 +46,7 @@ object Xtream {
         (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 60_000
-            setRequestProperty("User-Agent", "MigTV/0.2")
+            setRequestProperty("User-Agent", "MigTV/0.3")
         }
 
     /** Vérifie les identifiants via player_api.php. Lève XtreamException si refusés. */
