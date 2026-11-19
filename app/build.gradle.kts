@@ -36,5 +36,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-cast-framework:21.5.0")
     implementation("androidx.mediarouter:mediarouter:1.7.0")
     implementation("dev.ffmpegkit-maintained:ffmpeg-kit-https:8.1.7")
+    // Non déclarée dans le POM du fork, mais requise par l'API FFmpegKit à l'exécution
+    implementation("com.arthenica:smart-exception-java:0.2.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 }
