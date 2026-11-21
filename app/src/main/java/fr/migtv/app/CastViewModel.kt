@@ -49,6 +49,10 @@ class CastViewModel(private val app: Application) : AndroidViewModel(app) {
     var status by mutableStateOf<String?>(null)
         private set
 
+    /** Source réellement envoyée au Chromecast (diagnostic). */
+    var sent by mutableStateOf<String?>(null)
+        private set
+
     private var target: Entry? = null
     private var loadJob: Job? = null
 
@@ -124,6 +128,7 @@ class CastViewModel(private val app: Application) : AndroidViewModel(app) {
         loadJob?.cancel()
         casting = false
         status = null
+        sent = null
         AudioRelay.stop()
     }
 
@@ -154,6 +159,8 @@ class CastViewModel(private val app: Application) : AndroidViewModel(app) {
                     entry.url
                 }
                 send(client, entry, url, live = converting || entry.kind == Kind.LIVE)
+                sent = if (converting) "relais local AAC (${url.substringAfter("//").substringBefore("/")})"
+                else "flux direct (${url.substringAfter("//").substringBefore("/").substringBefore(":")})"
                 status = null
             } catch (e: IOException) {
                 status = (e.message ?: "Erreur").replace(entry.url, "<flux>")

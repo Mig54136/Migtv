@@ -278,6 +278,10 @@ fun CastPanel(cast: CastViewModel) {
             },
             color = InkSoft, fontSize = 13.sp
         )
+        cast.sent?.let {
+            Spacer(Modifier.height(6.dp))
+            Text("Envoyé : $it", color = InkSoft, fontSize = 13.sp)
+        }
         cast.status?.let {
             Spacer(Modifier.height(10.dp))
             Text(it, color = TitleBlue, fontWeight = FontWeight.Bold)
